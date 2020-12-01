@@ -1,5 +1,4 @@
-# ******** IMPORTS ********
-
+# ******** IMPORTS ******** 
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
@@ -7,7 +6,7 @@ import time
 import queue
 import threading
 
-# ******** CLASSES ********
+# ******** CLASSES ******** 
 
 # bufferless VideoCapture
 class VideoCapture:
@@ -42,7 +41,7 @@ class Formatter(object):
     def __call__(self, x, y):
         return 'x={:.01f}, y={:.01f}, val = '.format(x, y)
 
-# ******** FUNCTIONS ********
+# ******** FUNCTIONS ******** 
 
 def printImageValues(image):
     get_ipython().run_line_magic('matplotlib', 'widget')
@@ -152,7 +151,7 @@ def find_destination_center(frame):
 def find_objects(frame_objects):
     blurred_objects = cv2.GaussianBlur(frame_objects, (5, 5), 1.5)
     #edges_objects = cv2.Canny(blurred_objects, 50, 100)
-    #Only take absolute black objects :
+    #Only take absolute black objects : 
     hsv = cv2.cvtColor(frame_objects, cv2.COLOR_BGR2HSV)
     #printImageValues(hsv)
     # mask = cv2.inRange(hsv, (36, 25, 25), (86, 255,255))
@@ -164,19 +163,19 @@ def find_objects(frame_objects):
     imask = mask_black>0
     black = np.zeros_like(frame_objects, np.uint8)
     black[imask] = 255
-    gray_objects = cv2.cvtColor(black, cv2.COLOR_BGR2GRAY)
+    gray_objects = cv2.cvtColor(black, cv2.COLOR_BGR2GRAY) 
     plt.figure(figsize = (50,10))
     plt.imshow(gray_objects)
     plt.show()
     output_objects = np.zeros_like(black)
-    # Finding Contours
-    # Use a copy of the image e.g. edged.copy()
-    # since findContours alters the image
-    contours, hierarchy = cv2.findContours(gray_objects,
-        cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    # Finding Contours 
+    # Use a copy of the image e.g. edged.copy() 
+    # since findContours alters the image 
+    contours, hierarchy = cv2.findContours(gray_objects,  
+        cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE) 
     #cv2.drawContours(black, contours, -1, (0, 0, 255), -1)
-    # Draw all contours
-    # -1 signifies drawing all contours
+    # Draw all contours 
+    # -1 signifies drawing all contours 
     for cnt in contours:
         area = cv2.contourArea(cnt)
         approx = cv2.approxPolyDP(cnt, 0.009 * cv2.arcLength(cnt, True), True)
@@ -189,7 +188,7 @@ def find_objects(frame_objects):
                 cv2.drawContours(output_objects,[box],0,(255,255,255),-1)
     return output_objects
 
-# ******** NOT SURE IF NEED THOSE FUNCTIONS ********
+# ******** NOT SURE IF NEED THOSE FUNCTIONS ******** 
 
 def mouseHSV(event,x,y,flags,param):
     if event == cv2.EVENT_LBUTTONDOWN: #checks mouse left button down condition
