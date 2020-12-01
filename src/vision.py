@@ -135,7 +135,7 @@ def find_destination_center(frame):
     circles_red = cv2.HoughCircles(red_gray, cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=100, param2 = 20, minRadius = 30, maxRadius = 150)
     # ensure at least some circles were found
     output_destination = frame.copy()
-    print(circles_red)
+        #print(circles_red)
     if circles_red is not None:
         # convert the (x, y) coordinates and radius of the circles to integers
         circles_red = np.round(circles_red[0, :]).astype("int")
@@ -154,35 +154,38 @@ def find_objects(frame_objects):
     #edges_objects = cv2.Canny(blurred_objects, 50, 100)
     #Only take absolute black objects :
     hsv = cv2.cvtColor(frame_objects, cv2.COLOR_BGR2HSV)
-    #printImageValues(hsv)
+        #printImageValues(hsv)
     # mask = cv2.inRange(hsv, (36, 25, 25), (86, 255,255))
-    mask_black = cv2.inRange(hsv, (100, 0, 0), (170, 255,90))
-    get_ipython().run_line_magic('matplotlib', 'inline')
-    plt.imshow(mask_black)
-    plt.show()
+    mask_black = cv2.inRange(hsv, (0, 0, 0), (170, 255,150))
+        #get_ipython().run_line_magic('matplotlib', 'inline')
+        #plt.imshow(mask_black)
+        #plt.show()
     ## slice the black
     imask = mask_black>0
     black = np.zeros_like(frame_objects, np.uint8)
     black[imask] = 255
     gray_objects = cv2.cvtColor(black, cv2.COLOR_BGR2GRAY)
-    plt.figure(figsize = (50,10))
-    plt.imshow(gray_objects)
-    plt.show()
+        #plt.figure(figsize = (50,10))
+        #plt.imshow(gray_objects)
+        #plt.show()
     output_objects = np.zeros_like(black)
     # Finding Contours
     # Use a copy of the image e.g. edged.copy()
     # since findContours alters the image
     contours, hierarchy = cv2.findContours(gray_objects,
         cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    #cv2.drawContours(black, contours, -1, (0, 0, 255), -1)
+    cv2.drawContours(black, contours, -1, (0, 0, 255), -1)
+        #plt.figure(figsize = (50,10))
+        #plt.imshow(black)
+        #plt.show()
     # Draw all contours
     # -1 signifies drawing all contours
     for cnt in contours:
         area = cv2.contourArea(cnt)
         approx = cv2.approxPolyDP(cnt, 0.009 * cv2.arcLength(cnt, True), True)
-        #print(area, len(approx))
-        if (area > 800) & (area < 4000):
-            if(len(approx) in range(4, 10)):
+            #print(area, len(approx))
+        if (area > 7000) & (area < 13000):
+            if(len(approx) in range(4, 6)):
                 rect = cv2.minAreaRect(cnt)
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)

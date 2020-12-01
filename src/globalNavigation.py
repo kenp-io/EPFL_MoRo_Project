@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 from matplotlib import colors
+from Thymio import Thymio
+import time
 
 # ******** FUNCTIONS ********
 
@@ -27,9 +29,9 @@ def create_empty_plot(max_val):
     :return: the fig and ax objects.
     """
     fig, ax = plt.subplots(figsize=(7,7))
-
-    major_ticks_x = np.arange(0, max_val*4/3+1, 5)
-    minor_ticks_x = np.arange(0, max_val*4/3+1, 1)
+    RATIO = 16/9
+    major_ticks_x = np.arange(0, max_val*RATIO+1, 5)
+    minor_ticks_x = np.arange(0, max_val*RATIO+1, 1)
     major_ticks_y = np.arange(0, max_val+1, 5)
     minor_ticks_y = np.arange(0, max_val+1, 1)
     ax.set_xticks(major_ticks_x)
@@ -39,7 +41,7 @@ def create_empty_plot(max_val):
     ax.grid(which='minor', alpha=0.2)
     ax.grid(which='major', alpha=0.5)
     ax.set_ylim([-1,max_val])
-    ax.set_xlim([-1,max_val*4/3])
+    ax.set_xlim([-1,max_val*RATIO])
     ax.grid(True)
 
     return fig, ax
@@ -236,3 +238,43 @@ def display_occupancy_grid(output_objects):
     ax.imshow(cv2.flip(occupancy_grid, 0))
     plt.title("Map : free cells in white, occupied cells in black");
     return occupancy_grid, cmap
+
+def angleCalculator(robot_front_absolute, robot_center_absolute, destination_center_absolute):
+    angleRobotAbsolute = np.arctan2(robot_front_absolute[1] - robot_center_absolute[1], robot_front_absolute[0] - robot_center_absolute[0])
+    #print("Robot : ", np.rad2deg(angleRobotAbsolute))
+    angleGoalAbsolute = np.arctan2(destination_center_absolute[1] - robot_center_absolute[1], destination_center_absolute[0] - robot_center_absolute[0])
+    #print("Angle goal absolute:", np.rad2deg(angleGoalAbsolute))
+    angleToTurn = np.rad2deg(angleGoalAbsolute - angleRobotAbsolute)%360
+    if angleToTurn > 180:
+        return angleToTurn-360
+    else:
+        return angleToTurn
+
+def distanceCalculator(current_x, current_y, goal_x, goal_y):
+    return np.sqrt((goal_x-current_x)**2-(goal_y-current_y)**2),
+
+def turnAngle(angle, th):
+    FULLROTATIONTIME = 8700
+    if angle > 0:
+        th.set_var("motor.left.target", 2**16-100)
+        th.set_var("motor.right.target", 100)
+        time.sleep(FULLROTATIONTIME/360*abs(angle)/1000)
+        th.set_var("motor.left.target", 0)
+        th.set_var("motor.right.target", 0)
+    elif angle < 0:
+        th.set_var("motor.left.target", 100)
+        th.set_var("motor.right.target", 2**16-100)
+        time.sleep(FULLROTATIONTIME/360*abs(angle)/1000)
+        th.set_var("motor.left.target", 0)
+        th.set_var("motor.right.target", 0)
+
+def followPath(robot_front_absolute, robot_center_absolute, destination_center_absolute, path, index, th):
+    #first rotation to put the thymio at 45/90 degrees
+    angleToTurn = angleCalculator(robot_front_absolute, robot_center_absolute, [path[0][index],path[1][index]])
+    turnAngle(angleToTurn, th)
+    distanceInPixels = distanceCalculator(robot_center_absolute[0],robot_center_absolute[1], destination_center_absolute[0], destination_center_absolute[1])
+    #start timer
+    th.set_var("motor.left.target", 100)
+    th.set_var("motor.right.target", 100)
+    robot_center_absolute, _ = vision.find_thymio_center(frame)
+    #Go towards next point in path
