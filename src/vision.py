@@ -82,9 +82,10 @@ def find_thymio_center(frame):
             # corresponding to the center of the circle
             cv2.circle(output_green, (x, y), r, (0, 0, 255), 2)
             cv2.rectangle(output_green, (x - 2, y - 2), (x + 2, y + 2), (0, 128, 255), -1)
-    #ERROR HERE IF NO CIRCLES - NEED FIXING
-    robot_center_absolute = [circles_green[0][0], 720 - circles_green[0][1]]
-    return robot_center_absolute, output_green
+        robot_center_absolute = [circles_green[0][0], 720 - circles_green[0][1]]
+        return robot_center_absolute, output_green
+    else:
+        return None, None
 
 def find_thymio_front(frame):
     blurred_frame = cv2.GaussianBlur(frame, (7, 7), 1.5)
@@ -112,9 +113,10 @@ def find_thymio_front(frame):
             # corresponding to the center of the circle
             cv2.circle(output_blue, (x, y), r, (0, 0, 255), 2)
             cv2.rectangle(output_blue, (x - 2, y - 2), (x + 2, y + 2), (0, 128, 255), -1)
-    #ERROR HERE IF NO CIRCLES - NEED FIXING
-    robot_front_absolute = [circles_blue[0][0], 720 - circles_blue[0][1]]
-    return robot_front_absolute, output_blue
+        robot_front_absolute = [circles_blue[0][0], 720 - circles_blue[0][1]]
+        return robot_front_absolute, output_blue
+    else:
+        return None, None
 
 def find_destination_center(frame):
     blurred_frame = cv2.GaussianBlur(frame, (7, 7), 1.5)
@@ -143,9 +145,10 @@ def find_destination_center(frame):
             # corresponding to the center of the circle
             cv2.circle(output_destination, (x, y), r, (0, 0, 255), 2)
             cv2.rectangle(output_destination, (x - 2, y - 2), (x + 2, y + 2), (0, 128, 255), -1)
-    #ERROR HERE IF NO CIRCLES - NEED FIXING
-    destination_center_absolute = [circles_red[0][0], 720 - circles_red[0][1]]
-    return destination_center_absolute, output_destination
+        destination_center_absolute = [circles_red[0][0], 720 - circles_red[0][1]]
+        return destination_center_absolute, output_destination
+    else:
+        return None, None
 
 def find_objects(frame_objects):
     blurred_objects = cv2.GaussianBlur(frame_objects, (5, 5), 1.5)
@@ -187,7 +190,7 @@ def find_objects(frame_objects):
                 rect = cv2.minAreaRect(cnt)
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
-                cv2.drawContours(output_objects,[box],0,(255,255,255),150)
+                cv2.drawContours(output_objects,[box],0,(255,255,255),90)
     return output_objects
 
 # ******** NOT SURE IF NEED THOSE FUNCTIONS ********

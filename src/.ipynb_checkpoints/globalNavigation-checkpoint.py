@@ -7,8 +7,6 @@ from matplotlib import colors
 from Thymio import Thymio
 import time
 
-import utils
-
 #maybe to remove
 import vision
 
@@ -255,12 +253,14 @@ def transformPath(path):
         finalPath.append([new_path[0][i],new_path[1][i]])
     return finalPath
 
-def angleDifference(angleRef, angleGoal):
-        #print(f'angleRef: {np.rad2deg(angleRef)}')
-        #print(f'angleGoal: {np.rad2deg(angleGoal)}')
-    angleToTurn = (angleGoal - angleRef)%(2*np.pi)
-    if angleToTurn > np.pi:
-        return angleToTurn-(2*np.pi)
+def angleCalculator(robot_front_absolute, robot_center_absolute, destination_center_absolute):
+    angleRobotAbsolute = np.arctan2(robot_front_absolute[1] - robot_center_absolute[1], robot_front_absolute[0] - robot_center_absolute[0])
+        #print("Robot : ", np.rad2deg(angleRobotAbsolute))
+    angleGoalAbsolute = np.arctan2(destination_center_absolute[1] - robot_center_absolute[1], destination_center_absolute[0] - robot_center_absolute[0])
+        #print("Angle goal absolute:", np.rad2deg(angleGoalAbsolute))
+    angleToTurn = np.rad2deg(angleGoalAbsolute - angleRobotAbsolute)%360
+    if angleToTurn > 180:
+        return angleToTurn-360
     else:
         return angleToTurn
 
@@ -280,30 +280,28 @@ def angleCalculatorPath(robot_front_absolute, robot_center_absolute, destination
 def distanceCalculator(current, goal):
     return np.sqrt((goal[0]-current[0])**2+(goal[1]-current[1])**2)
 
-def angleTwoPoints(pointGoal, pointStart):
-    angleRobotAbsolute = np.arctan2(pointGoal[1] - pointStart[1], pointGoal[0] - pointStart[0])
-    return angleRobotAbsolute
-
-def turnAngle(angle, ourThymio):
+def turnAngle(angle, th):
+    FULLROTATIONTIME = 8700
     if angle > 0:
-        ourThymio.th.set_var("motor.left.target", 2**16-100)
-        ourThymio.th.set_var("motor.right.target", 100)
-        time.sleep(utils.FULLROTATIONTIME/(2*np.pi)*abs(angle)/1000)
-        ourThymio.th.set_var("motor.left.target", 0)
-        ourThymio.th.set_var("motor.right.target", 0)
+        th.set_var("motor.left.target", 2**16-100)
+        th.set_var("motor.right.target", 100)
+        time.sleep(FULLROTATIONTIME/360*abs(angle)/1000)
+        th.set_var("motor.left.target", 0)
+        th.set_var("motor.right.target", 0)
     elif angle < 0:
-        ourThymio.th.set_var("motor.left.target", 100)
-        ourThymio.th.set_var("motor.right.target", 2**16-100)
-        time.sleep(utils.FULLROTATIONTIME/(2*np.pi)*abs(angle)/1000)
-        ourThymio.th.set_var("motor.left.target", 0)
-        ourThymio.th.set_var("motor.right.target", 0)
+        th.set_var("motor.left.target", 100)
+        th.set_var("motor.right.target", 2**16-100)
+        time.sleep(FULLROTATIONTIME/360*abs(angle)/1000)
+        th.set_var("motor.left.target", 0)
+        th.set_var("motor.right.target", 0)
 
-def goForward(distance, ourThymio):
-    ourThymio.th.set_var("motor.left.target", 100)
-    ourThymio.th.set_var("motor.right.target", 100)
-    time.sleep(distance/utils.FORWARDCONSTANT)
-    ourThymio.th.set_var("motor.left.target", 0)
-    ourThymio.th.set_var("motor.right.target", 0)
+def goForward(distance,th):
+    FORWARDCONSTANT = 37.95
+    th.set_var("motor.left.target", 100)
+    th.set_var("motor.right.target", 100)
+    time.sleep(distance/FORWARDCONSTANT)
+    th.set_var("motor.left.target", 0)
+    th.set_var("motor.right.target", 0)
 
 def getAbsoluteAngle(pointA, pointB):
         #print(f'point A: {pointA}')
@@ -321,6 +319,7 @@ def pathSimplifier(path):
     index = 0
     simplePath = []
     simplePath.append(path[index])
+    print(simplePath)
     index = index + 1
     finalIndex = index
     while finalIndex < len(path)-1:
@@ -353,19 +352,19 @@ def pathSimplifier(path):
 
     return simplePath
 
-def followPath(ourThymio, path):
+def followPath(robot_front_absolute, robot_center_absolute, destination_center_absolute, path, th):
     for index in range(len(path)-1):
-        print(f'path index: {index}')
+        print(f'index: {index}')
         if index == 0:
-            angleToTurn = angleDifference(ourThymio.angle, angleTwoPoints(path[index+1],ourThymio.getCenter()))
-            print(f'angleToTurn: {np.rad2deg(angleToTurn)}')
-            turnAngle(angleToTurn, ourThymio)
+            angleToTurn = angleCalculator(robot_front_absolute, robot_center_absolute,
+                                          path[index+1])
+            turnAngle(angleToTurn, th)
         else:
             angleToTurn = angleCalculatorPath(path[index],path[index-1],path[index+1])
-            print(f'angleToTurn: {np.rad2deg(angleToTurn)}')
-            turnAngle(angleToTurn, ourThymio)
+            print(angleToTurn)
+            turnAngle(angleToTurn, th)
         distance = distanceCalculator(path[index], path[index+1])
-        goForward(distance, ourThymio)
+        goForward(distance,th)
 
 
 '''def getSpeedConstant(robot_front_absolute, robot_center_absolute, destination_center_absolute, path, index, th, cap):
