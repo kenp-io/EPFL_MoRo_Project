@@ -57,11 +57,11 @@ def find_thymio_center(frame):
     # Convert image to HSV and only take green channel
     ## convert to hsv
     hsv = cv2.cvtColor(blurred_frame, cv2.COLOR_BGR2HSV)
-        #printImageValues(hsv)
-    mask_green = cv2.inRange(hsv, (80, 100, 50), (100, 140,255))
-        #%matplotlib inline
-        #plt.imshow(mask_green)
-        #plt.show()
+    #printImageValues(hsv)
+    mask_green = cv2.inRange(hsv, (60, 60, 60), (80, 255,255))
+    #get_ipython().run_line_magic('matplotlib', 'inline')
+    #plt.imshow(mask_green)
+    #plt.show()
     ## slice the green
     imask = mask_green>0
     green = np.zeros_like(frame, np.uint8)
@@ -86,14 +86,13 @@ def find_thymio_center(frame):
     robot_center_absolute = [circles_green[0][0], 720 - circles_green[0][1]]
     return robot_center_absolute, output_green
 
-
 def find_thymio_front(frame):
     blurred_frame = cv2.GaussianBlur(frame, (7, 7), 1.5)
     # Convert image to HSV and only take blue channel
     ## convert to hsv
     hsv = cv2.cvtColor(blurred_frame, cv2.COLOR_BGR2HSV)
-        #printImageValues(hsv)
-    mask_blue = cv2.inRange(hsv, (90, 170, 60), (110, 255,255))
+    #printImageValues(hsv)
+    mask_blue = cv2.inRange(hsv, (110, 60, 60), (130, 255,255))
     ## slice the blue
     imask = mask_blue>0
     blue = np.zeros_like(frame, np.uint8)
@@ -116,7 +115,6 @@ def find_thymio_front(frame):
     #ERROR HERE IF NO CIRCLES - NEED FIXING
     robot_front_absolute = [circles_blue[0][0], 720 - circles_blue[0][1]]
     return robot_front_absolute, output_blue
-
 
 def find_destination_center(frame):
     blurred_frame = cv2.GaussianBlur(frame, (7, 7), 1.5)
@@ -189,7 +187,7 @@ def find_objects(frame_objects):
                 rect = cv2.minAreaRect(cnt)
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
-                cv2.drawContours(output_objects,[box],0,(255,255,255),-1)
+                cv2.drawContours(output_objects,[box],0,(255,255,255),150)
     return output_objects
 
 # ******** NOT SURE IF NEED THOSE FUNCTIONS ********

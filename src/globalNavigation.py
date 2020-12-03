@@ -7,6 +7,9 @@ from matplotlib import colors
 from Thymio import Thymio
 import time
 
+#maybe to remove
+import vision
+
 # ******** FUNCTIONS ********
 
 def variable_info(variable):
@@ -102,11 +105,11 @@ def A_Star(start, goal, h, coords, occupancy_grid, movement_type="4N", max_val =
     # -----------------------------------------
     # DO NOT EDIT THIS PORTION OF CODE
     # -----------------------------------------
-
+    RATIO = 16/9
     # Check if the start and goal are within the boundaries of the map
     for point in [start, goal]:
-        for coord in point:
-            assert coord>=0 and coord<max_val, "start or end goal not contained in the map"
+        assert point[0]>=0 and point[0]<max_val*RATIO+1, "start or end goal not contained in the map, x-axis"
+        assert point[1]>=0 and point[1]<max_val, "start or end goal not contained in the map, y-axis"
 
     # check if start and goal nodes correspond to free spaces
     if occupancy_grid[start[0], start[1]]:
@@ -191,7 +194,8 @@ def A_Star(start, goal, h, coords, occupancy_grid, movement_type="4N", max_val =
     return [], closedSet
 
 def runAstar(start, goal, max_val, occupancy_grid, cmap):
-    x,y = np.mgrid[0:max_val:1, 0:max_val:1]
+    RATIO = 16/9
+    x,y = np.mgrid[0:max_val*RATIO+1:1, 0:max_val:1]
     pos = np.empty(x.shape + (2,))
     pos[:, :, 0] = x; pos[:, :, 1] = y
     pos = np.reshape(pos, (x.shape[0]*x.shape[1], 2))
@@ -239,19 +243,42 @@ def display_occupancy_grid(output_objects):
     plt.title("Map : free cells in white, occupied cells in black");
     return occupancy_grid, cmap
 
+def transformPath(path):
+    #upscale the path
+    new_path = path*14.41
+    new_path = [[round(x) for x in new_path[0]], [round(y) for y in new_path[1]]]
+    #transform its shape
+    finalPath = []
+    for i in range(len(path[0])):
+        finalPath.append([new_path[0][i],new_path[1][i]])
+    return finalPath
+
 def angleCalculator(robot_front_absolute, robot_center_absolute, destination_center_absolute):
     angleRobotAbsolute = np.arctan2(robot_front_absolute[1] - robot_center_absolute[1], robot_front_absolute[0] - robot_center_absolute[0])
-    #print("Robot : ", np.rad2deg(angleRobotAbsolute))
+        #print("Robot : ", np.rad2deg(angleRobotAbsolute))
     angleGoalAbsolute = np.arctan2(destination_center_absolute[1] - robot_center_absolute[1], destination_center_absolute[0] - robot_center_absolute[0])
-    #print("Angle goal absolute:", np.rad2deg(angleGoalAbsolute))
+        #print("Angle goal absolute:", np.rad2deg(angleGoalAbsolute))
     angleToTurn = np.rad2deg(angleGoalAbsolute - angleRobotAbsolute)%360
     if angleToTurn > 180:
         return angleToTurn-360
     else:
         return angleToTurn
 
-def distanceCalculator(current_x, current_y, goal_x, goal_y):
-    return np.sqrt((goal_x-current_x)**2-(goal_y-current_y)**2),
+def angleCalculatorPath(robot_front_absolute, robot_center_absolute, destination_center_absolute):
+    angleRobotAbsolute = np.arctan2(robot_front_absolute[1] - robot_center_absolute[1],
+                                    robot_front_absolute[0] - robot_center_absolute[0])
+        #print("Robot : ", np.rad2deg(angleRobotAbsolute))
+    angleGoalAbsolute = np.arctan2(destination_center_absolute[1] - robot_front_absolute[1],
+                                   destination_center_absolute[0] - robot_front_absolute[0])
+        #print("Angle goal absolute:", np.rad2deg(angleGoalAbsolute))
+    angleToTurn = np.rad2deg(angleGoalAbsolute - angleRobotAbsolute)%360
+    if angleToTurn > 180:
+        return angleToTurn-360
+    else:
+        return angleToTurn
+
+def distanceCalculator(current, goal):
+    return np.sqrt((goal[0]-current[0])**2+(goal[1]-current[1])**2)
 
 def turnAngle(angle, th):
     FULLROTATIONTIME = 8700
@@ -268,13 +295,114 @@ def turnAngle(angle, th):
         th.set_var("motor.left.target", 0)
         th.set_var("motor.right.target", 0)
 
-def followPath(robot_front_absolute, robot_center_absolute, destination_center_absolute, path, index, th):
-    #first rotation to put the thymio at 45/90 degrees
-    angleToTurn = angleCalculator(robot_front_absolute, robot_center_absolute, [path[0][index],path[1][index]])
-    turnAngle(angleToTurn, th)
-    distanceInPixels = distanceCalculator(robot_center_absolute[0],robot_center_absolute[1], destination_center_absolute[0], destination_center_absolute[1])
-    #start timer
+def goForward(distance,th):
+    FORWARDCONSTANT = 37.95
     th.set_var("motor.left.target", 100)
     th.set_var("motor.right.target", 100)
-    robot_center_absolute, _ = vision.find_thymio_center(frame)
-    #Go towards next point in path
+    time.sleep(distance/FORWARDCONSTANT)
+    th.set_var("motor.left.target", 0)
+    th.set_var("motor.right.target", 0)
+
+def getAbsoluteAngle(pointA, pointB):
+        #print(f'point A: {pointA}')
+        #print(f'point B: {pointB}')
+    if (pointB[0]-pointA[0]) == 0:
+        if (pointB[1]-pointA[1])>0:
+            return 100
+        else:
+            return -100
+    return (pointB[1]-pointA[1])/(pointB[0]-pointA[0])
+
+def pathSimplifier(path):
+    THRESHOLD = 3
+    THRESHOLD_CLOSE = 5
+    index = 0
+    simplePath = []
+    simplePath.append(path[index])
+    print(simplePath)
+    index = index + 1
+    finalIndex = index
+    while finalIndex < len(path)-1:
+            #print(f'Main loop')
+            #print(f'Main index: {index}')
+            #print(f'Main finalIndex: {finalIndex}')
+        lookingFurther = 0
+        index = finalIndex
+        refAngle = getAbsoluteAngle(path[index],path[index+1])
+        while index < len(path)-1:
+                #print(f'Inside loop')
+                #print(f'index:{index}')
+            newAngle = getAbsoluteAngle(path[index], path[index+1])
+                #print(abs(refAngle-newAngle))
+            if abs(refAngle-newAngle) > 0.2:
+                if lookingFurther < THRESHOLD:
+                    lookingFurther = lookingFurther+1
+                else:
+                    break
+            else:
+                lookingFurther = 0
+                finalIndex = index+1
+                if finalIndex > len(path)-1-THRESHOLD_CLOSE:
+                    finalIndex = len(path)-1
+                    break
+            index = index + 1
+                #print(f'Inside index: {index}')
+                #print(f'Inside finalIndex: {finalIndex}')
+        simplePath.append(path[finalIndex])
+
+    return simplePath
+
+def followPath(robot_front_absolute, robot_center_absolute, destination_center_absolute, path, th):
+    for index in range(len(path)-1):
+        print(f'index: {index}')
+        if index == 0:
+            angleToTurn = angleCalculator(robot_front_absolute, robot_center_absolute,
+                                          path[index+1])
+            turnAngle(angleToTurn, th)
+        else:
+            angleToTurn = angleCalculatorPath(path[index],path[index-1],path[index+1])
+            print(angleToTurn)
+            turnAngle(angleToTurn, th)
+        distance = distanceCalculator(path[index], path[index+1])
+        goForward(distance,th)
+
+
+'''def getSpeedConstant(robot_front_absolute, robot_center_absolute, destination_center_absolute, path, index, th, cap):
+    #first rotation to put the thymio at 45/90 degrees
+    angleToTurn = angleCalculator(robot_front_absolute, robot_center_absolute, destination_center_absolute)
+    print(angleToTurn)
+    turnAngle(angleToTurn, th)
+    distanceInPixels = distanceCalculator(robot_center_absolute[0],robot_center_absolute[1], destination_center_absolute[0], destination_center_absolute[1])
+    distanceOld = distanceInPixels
+    print(f'distance ini: {distanceInPixels}')
+    #start timer
+    timeBefore = time.perf_counter()
+    th.set_var("motor.left.target", 100)
+    th.set_var("motor.right.target", 100)
+    while int(distanceInPixels) > 5:
+        frame = cap.read()
+        robot_center_absolute, _ = vision.find_thymio_center(frame)
+        distanceOld = distanceInPixels
+        distanceInPixels = distanceCalculator(robot_center_absolute[0],robot_center_absolute[1], destination_center_absolute[0], destination_center_absolute[1])
+        if np.isnan(distanceInPixels):
+            distanceInPixels = distanceOld
+        print(f'distance: {distanceInPixels}')
+    th.set_var("motor.left.target", 0)
+    th.set_var("motor.right.target", 0)
+    print(f'total time: {time.perf_counter()-timeBefore}')
+    #Go towards next point in path'''
+
+'''    def getNextTurn(path,startIndex):
+        index = startIndex
+        refAngle = getAbsoluteAngle(path[index],path[index+1])
+        straight = True
+        index = index + 1
+        while index < len(path)-1:
+            #print(f'index:{index}')
+            newAngle = getAbsoluteAngle(path[index], path[index+1])
+            #print(abs(refAngle-newAngle))
+            if abs(refAngle-newAngle) > 0.2:
+                straight = False
+                return index
+            index = index + 1
+        return index'''
