@@ -15,7 +15,8 @@ class kalmanThread(Thread):
 
     def run(self):
         while not self.stopped.wait(DT):
-            runTracker(self)
+            if not self.ourThymio.reached:
+                runTracker(self)
 
 def createTracker(iniVector):
 
@@ -43,9 +44,39 @@ def createTracker(iniVector):
 def runTracker(self):
 
     self.tracker.predict(u=self.ourThymio.getVel())
-    print('predict')
-    print(self.tracker.x)
+        #print('predict')
+        #print(self.tracker.x)
     z = self.ourThymio.readKalman()
     self.tracker.update(z)
-    print('update')
-    print(self.tracker.x)
+        #print('update')
+        #print(self.tracker.x)
+        #print('self.x')
+        #print(self.ourThymio.getVel())
+    runCorrection(self)
+
+def runCorrection(self):
+
+    estXVel = self.tracker.x[2]
+    estYVel = self.tracker.x[3]
+    [camXVel,camYVel] = self.ourThymio.getVel()
+    #avoid dividing by zero
+    if camXVel == 0 or camYVel == 0:
+        return
+    #relative error
+    ratioX = (estXVel-camXVel)/max(abs(camXVel),abs(estXVel))
+    ratioY = (estYVel-camYVel)/max(abs(camYVel),abs(estYVel))
+    if ratioX == 0 or ratioY == 0:
+        return
+    #choose most important axis
+    if abs(ratioX)>=abs(ratioY):
+        if ratioX > 0:
+            self.ourThymio.correctToRight(abs(ratioX))
+        else:
+            self.ourThymio.correctToLeft(abs(ratioX))
+    else:
+        if ratioY > 0:
+            self.ourThymio.correctToRight(abs(ratioY))
+        else:
+            self.ourThymio.correctToLeft(abs(ratioY))
+
+            #print(f'RATIO {ratioX} {ratioY}')

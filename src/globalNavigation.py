@@ -14,8 +14,6 @@ import kalman
 import vision
 import localNavigation
 
-REACHED = False
-
 # ******** FUNCTIONS ********
 
 def variable_info(variable):
@@ -216,6 +214,15 @@ def runAstar(start, goal, max_val, occupancy_grid, cmap):
     path = np.array(path).reshape(-1, 2).transpose()
     visitedNodes = np.array(visitedNodes).reshape(-1, 2).transpose()
 
+    pathRestructed = restructurePath(path)
+    print('Path Original:')
+    print(pathRestructed)
+    simplePath = pathSimplifier(pathRestructed)
+    simplePathUpscaled = upscalePath(simplePath)
+    print('Path Simple:')
+    print(simplePathUpscaled)
+
+
     # Displaying the map
     fig_astar, ax_astar = create_empty_plot(max_val)
     ax_astar.imshow(cv2.flip(occupancy_grid, 0), cmap=cmap)
@@ -225,7 +232,8 @@ def runAstar(start, goal, max_val, occupancy_grid, cmap):
     ax_astar.plot(path[0], path[1], marker="o", color = 'blue');
     ax_astar.scatter(start[0], start[1], marker="o", color = 'green', s=200);
     ax_astar.scatter(goal[0], goal[1], marker="o", color = 'purple', s=200);
-    return path
+    ax_astar.scatter([i[0] for i in simplePath], [i[1] for i in simplePath], marker="o", color = 'red', s=200);
+    return simplePathUpscaled
 
 def display_occupancy_grid(output_objects):
     test = output_objects.copy()
@@ -249,15 +257,20 @@ def display_occupancy_grid(output_objects):
     plt.title("Map : free cells in white, occupied cells in black");
     return occupancy_grid, cmap
 
-def transformPath(path):
-    #upscale the path
-    new_path = path*14.41
-    new_path = [[round(x) for x in new_path[0]], [round(y) for y in new_path[1]]]
+def restructurePath(path):
     #transform its shape
     finalPath = []
     for i in range(len(path[0])):
-        finalPath.append([new_path[0][i],new_path[1][i]])
+        finalPath.append([path[0][i],path[1][i]])
     return finalPath
+
+def upscalePath(path):
+    #upscale the path
+    new_path = np.asarray(path)*14.4
+    new_path = np.round(new_path, 0)
+    new_path = new_path.astype(int)
+    #new_path = [[round(x[0]) for x in new_path], [round(y[0]) for y in new_path]]
+    return new_path
 
 def angleDifference(angleRef, angleGoal):
         #print(f'angleRef: {np.rad2deg(angleRef)}')
@@ -270,9 +283,9 @@ def angleDifference(angleRef, angleGoal):
 
 def angleCalculatorPath(robotFront, robotCenter, destinationCenter):
     angleRobot = angleTwoPoints(robotFront, robotCenter)
-    print("Robot : ", np.rad2deg(angleRobot))
+        #print("Robot : ", np.rad2deg(angleRobot))
     angleGoal = angleTwoPoints(destinationCenter, robotFront)
-    print("Angle goal absolute:", np.rad2deg(angleGoal))
+        #print("Angle goal absolute:", np.rad2deg(angleGoal))
     angleToTurn = angleDifference(angleRobot, angleGoal)
     return angleToTurn
 
@@ -297,15 +310,16 @@ def turnAngle(angle, ourThymio):
 def goForward(distance, ourThymio):
     sleepTime = distance/utils.FORWARDCONSTANT
     ourThymio.forward()
-    t = threading.Timer(sleepTime, stopForward, [ourThymio])
+    t = threading.Timer(sleepTime, lambda: stopForward(ourThymio))
     t.start()
 
 def stopForward(ourThymio):
-    global REACHED
-    ourThymio.stopKalmanFlag.set()
+    ourThymio.reached = True
+    print('STOP')
+    print('STOP2')
     if not ourThymio.inLocal:
         ourThymio.stop()
-    REACHED = True
+    ourThymio.stopKalmanFlag.set()
 
 def getAbsoluteAngle(pointA, pointB):
         #print(f'point A: {pointA}')
@@ -318,8 +332,9 @@ def getAbsoluteAngle(pointA, pointB):
     return (pointB[1]-pointA[1])/(pointB[0]-pointA[0])
 
 def pathSimplifier(path):
-    THRESHOLD = 3
+    THRESHOLD = 1
     THRESHOLD_CLOSE = 5
+    MAX_STEPS = 2
     index = 0
     simplePath = []
     simplePath.append(path[index])
@@ -336,7 +351,7 @@ def pathSimplifier(path):
                 #print(f'Inside loop')
                 #print(f'index:{index}')
             newAngle = getAbsoluteAngle(path[index], path[index+1])
-                #print(abs(refAngle-newAngle))
+            #print(abs(refAngle-newAngle))
             if abs(refAngle-newAngle) > 0.2:
                 if lookingFurther < THRESHOLD:
                     lookingFurther = lookingFurther+1
@@ -359,8 +374,6 @@ def followPath(ourThymio, path):
 
     for index in range(len(path)-1):
 
-        global REACHED
-        REACHED = False
         print(f'path index: {index}')
 
         #Turns to face the next goal in path
@@ -374,23 +387,23 @@ def followPath(ourThymio, path):
             turnAngle(angleToTurn, ourThymio)
 
         #Goes forward towards next goal, kalman and local avoidance is active
-        ourThymio.stopKalmanFlag.clear()
+        ourThymio.reached = False
+        ourThymio.clearKalman()
         kThread = kalman.kalmanThread(ourThymio)
 
         distance = distanceCalculator(path[index], path[index+1])
         goForward(distance, ourThymio)
-
+        print("start the thread")
         kThread.start()
 
-        while not REACHED:
+        while not ourThymio.reached:
             #check if collision
             wentInLocal = localNavigation.localCheck(ourThymio)
             #check if local nav ended
             if wentInLocal:
-                ourThymio.inLocal = False
                 return False
             # kalman is executed automatically every DT in kThread
-
+            time.sleep(0.1)
     return True
 
 
