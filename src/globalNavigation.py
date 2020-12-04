@@ -358,9 +358,12 @@ def pathSimplifier(path):
 def followPath(ourThymio, path):
 
     for index in range(len(path)-1):
+
         global REACHED
         REACHED = False
         print(f'path index: {index}')
+
+        #Turns to face the next goal in path
         if index == 0:
             angleToTurn = angleDifference(ourThymio.angle, angleTwoPoints(path[index+1],ourThymio.getCenter()))
             print(f'angleToTurn: {np.rad2deg(angleToTurn)}')
@@ -370,8 +373,9 @@ def followPath(ourThymio, path):
             print(f'angleToTurn: {np.rad2deg(angleToTurn)}')
             turnAngle(angleToTurn, ourThymio)
 
+        #Goes forward towards next goal, kalman and local avoidance is active
         ourThymio.stopKalmanFlag.clear()
-        kThread = kalman.kalmanThread(ourThymio.stopKalmanFlag,ourThymio)
+        kThread = kalman.kalmanThread(ourThymio)
 
         distance = distanceCalculator(path[index], path[index+1])
         goForward(distance, ourThymio)
@@ -385,7 +389,7 @@ def followPath(ourThymio, path):
             if wentInLocal:
                 ourThymio.inLocal = False
                 return False
-            #do kalman
+            # kalman is executed automatically every DT in kThread
 
     return True
 

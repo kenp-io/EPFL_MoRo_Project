@@ -4,18 +4,18 @@ from filterpy.common import Q_discrete_white_noise
 from scipy.linalg import block_diag
 from threading import Timer,Thread,Event
 
-DT = 0.1
+DT = 0.5
 
 class kalmanThread(Thread):
-    def __init__(self, event, ourThymio):
+    def __init__(self, ourThymio):
         Thread.__init__(self)
-        self.stopped = event
+        self.stopped = ourThymio.stopKalmanFlag
         self.ourThymio = ourThymio
+        self.tracker = createTracker(self.ourThymio.readKalman())
 
     def run(self):
         while not self.stopped.wait(DT):
-            a = 2
-            #runTracker(ourThymio)
+            runTracker(self)
 
 def createTracker(iniVector):
 
@@ -40,12 +40,12 @@ def createTracker(iniVector):
 
     return tracker
 
-def runTracker(ourThymio):
+def runTracker(self):
 
-    '''iniVector = ourThymio.readKalman()
-    tracker = kalman.createTracker(iniVector)
-    tracker.predict(u=ourThymio.getVel())
-    print(tracker)
-    z = ourThymio.readKalman()
-    tracker.update(z)
-    print(tracker)'''
+    self.tracker.predict(u=self.ourThymio.getVel())
+    print('predict')
+    print(self.tracker.x)
+    z = self.ourThymio.readKalman()
+    self.tracker.update(z)
+    print('update')
+    print(self.tracker.x)
