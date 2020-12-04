@@ -5,12 +5,16 @@ import numpy as np
 import cv2
 from matplotlib import colors
 from Thymio import Thymio
+import threading
 import time
 
 import utils
-
+import kalman
 #maybe to remove
 import vision
+import localNavigation
+
+REACHED = False
 
 # ******** FUNCTIONS ********
 
@@ -264,18 +268,13 @@ def angleDifference(angleRef, angleGoal):
     else:
         return angleToTurn
 
-def angleCalculatorPath(robot_front_absolute, robot_center_absolute, destination_center_absolute):
-    angleRobotAbsolute = np.arctan2(robot_front_absolute[1] - robot_center_absolute[1],
-                                    robot_front_absolute[0] - robot_center_absolute[0])
-        #print("Robot : ", np.rad2deg(angleRobotAbsolute))
-    angleGoalAbsolute = np.arctan2(destination_center_absolute[1] - robot_front_absolute[1],
-                                   destination_center_absolute[0] - robot_front_absolute[0])
-        #print("Angle goal absolute:", np.rad2deg(angleGoalAbsolute))
-    angleToTurn = np.rad2deg(angleGoalAbsolute - angleRobotAbsolute)%360
-    if angleToTurn > 180:
-        return angleToTurn-360
-    else:
-        return angleToTurn
+def angleCalculatorPath(robotFront, robotCenter, destinationCenter):
+    angleRobot = angleTwoPoints(robotFront, robotCenter)
+    print("Robot : ", np.rad2deg(angleRobot))
+    angleGoal = angleTwoPoints(destinationCenter, robotFront)
+    print("Angle goal absolute:", np.rad2deg(angleGoal))
+    angleToTurn = angleDifference(angleRobot, angleGoal)
+    return angleToTurn
 
 def distanceCalculator(current, goal):
     return np.sqrt((goal[0]-current[0])**2+(goal[1]-current[1])**2)
@@ -285,25 +284,28 @@ def angleTwoPoints(pointGoal, pointStart):
     return angleRobotAbsolute
 
 def turnAngle(angle, ourThymio):
+    sleepTime = utils.FULLROTATIONTIME/(2*np.pi)*abs(angle)/1000
     if angle > 0:
-        ourThymio.th.set_var("motor.left.target", 2**16-100)
-        ourThymio.th.set_var("motor.right.target", 100)
-        time.sleep(utils.FULLROTATIONTIME/(2*np.pi)*abs(angle)/1000)
-        ourThymio.th.set_var("motor.left.target", 0)
-        ourThymio.th.set_var("motor.right.target", 0)
+        ourThymio.antiClockwise()
+        time.sleep(sleepTime)
+        ourThymio.stop()
     elif angle < 0:
-        ourThymio.th.set_var("motor.left.target", 100)
-        ourThymio.th.set_var("motor.right.target", 2**16-100)
-        time.sleep(utils.FULLROTATIONTIME/(2*np.pi)*abs(angle)/1000)
-        ourThymio.th.set_var("motor.left.target", 0)
-        ourThymio.th.set_var("motor.right.target", 0)
+        ourThymio.clockwise()
+        time.sleep(sleepTime)
+        ourThymio.stop()
 
 def goForward(distance, ourThymio):
-    ourThymio.th.set_var("motor.left.target", 100)
-    ourThymio.th.set_var("motor.right.target", 100)
-    time.sleep(distance/utils.FORWARDCONSTANT)
-    ourThymio.th.set_var("motor.left.target", 0)
-    ourThymio.th.set_var("motor.right.target", 0)
+    sleepTime = distance/utils.FORWARDCONSTANT
+    ourThymio.forward()
+    t = threading.Timer(sleepTime, stopForward, [ourThymio])
+    t.start()
+
+def stopForward(ourThymio):
+    global REACHED
+    ourThymio.stopKalmanFlag.set()
+    if not ourThymio.inLocal:
+        ourThymio.stop()
+    REACHED = True
 
 def getAbsoluteAngle(pointA, pointB):
         #print(f'point A: {pointA}')
@@ -354,7 +356,10 @@ def pathSimplifier(path):
     return simplePath
 
 def followPath(ourThymio, path):
+
     for index in range(len(path)-1):
+        global REACHED
+        REACHED = False
         print(f'path index: {index}')
         if index == 0:
             angleToTurn = angleDifference(ourThymio.angle, angleTwoPoints(path[index+1],ourThymio.getCenter()))
@@ -364,8 +369,26 @@ def followPath(ourThymio, path):
             angleToTurn = angleCalculatorPath(path[index],path[index-1],path[index+1])
             print(f'angleToTurn: {np.rad2deg(angleToTurn)}')
             turnAngle(angleToTurn, ourThymio)
+
+        ourThymio.stopKalmanFlag.clear()
+        kThread = kalman.kalmanThread(ourThymio.stopKalmanFlag,ourThymio)
+
         distance = distanceCalculator(path[index], path[index+1])
         goForward(distance, ourThymio)
+
+        kThread.start()
+
+        while not REACHED:
+            #check if collision
+            wentInLocal = localNavigation.localCheck(ourThymio)
+            #check if local nav ended
+            if wentInLocal:
+                ourThymio.inLocal = False
+                return False
+            #do kalman
+
+    return True
+
 
 
 '''def getSpeedConstant(robot_front_absolute, robot_center_absolute, destination_center_absolute, path, index, th, cap):

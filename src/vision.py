@@ -190,7 +190,7 @@ def find_objects(frame_objects):
                 rect = cv2.minAreaRect(cnt)
                 box = cv2.boxPoints(rect)
                 box = np.int0(box)
-                cv2.drawContours(output_objects,[box],0,(255,255,255),90)
+                cv2.drawContours(output_objects,[box],0,(255,255,255),120)
     return output_objects
 
 # ******** NOT SURE IF NEED THOSE FUNCTIONS ********

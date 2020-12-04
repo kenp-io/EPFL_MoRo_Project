@@ -2,11 +2,14 @@
 import numpy as np
 import time
 import cv2
+from threading import Event
+
 
 import vision
 import globalNavigation
 
 FORWARDCONSTANT = 37.95
+MOTORSPEED = 100
 FULLROTATIONTIME = 8900
 A_STAR_Y_AXIS_SIZE = 50
 
@@ -34,6 +37,12 @@ class virtualThymio(object):
         self.angle = globalNavigation.angleTwoPoints(robotFront,robotCenter)
         self.vel_x = 0.
         self.vel_y = 0.
+        self.vel_left = 0.
+        self.vel_right = 0.
+
+        self.inLocal = False
+        self.runningKalman = False
+        self.stopKalmanFlag = Event()
 
     def update(self):
         frame = self.cap.read()
@@ -53,10 +62,14 @@ class virtualThymio(object):
 
     def readKalman(self):
         self.update()
-        return [self.pos_x,
-                self.pos_y,
-                self.vel_x,
-                self.vel_y]
+        return np.array([[self.pos_x],
+                         [self.pos_y],
+                         [self.vel_x],
+                         [self.vel_y]])
+
+    def getVel(self):
+        return np.array([[self.vel_x],
+                         [self.vel_y]])
 
     def getFront(self):
         return [self.front_x,
@@ -65,6 +78,30 @@ class virtualThymio(object):
     def getCenter(self):
         return [self.pos_x,
                 self.pos_y]
+
+    def forward(self):
+        self.vel_left = MOTORSPEED
+        self.vel_right = MOTORSPEED
+        self.th.set_var("motor.left.target", MOTORSPEED)
+        self.th.set_var("motor.right.target", MOTORSPEED)
+
+    def antiClockwise(self):
+        self.vel_left = -MOTORSPEED
+        self.vel_right = MOTORSPEED
+        self.th.set_var("motor.left.target", 2**16-MOTORSPEED)
+        self.th.set_var("motor.right.target", MOTORSPEED)
+
+    def clockwise(self):
+        self.vel_left = MOTORSPEED
+        self.vel_right = -MOTORSPEED
+        self.th.set_var("motor.left.target", MOTORSPEED)
+        self.th.set_var("motor.right.target", 2**16-MOTORSPEED)
+
+    def stop(self):
+        self.vel_left = 0.
+        self.vel_right = 0.
+        self.th.set_var("motor.left.target", 0)
+        self.th.set_var("motor.right.target", 0)
 
 # ******** FUNCTIONS ********
 
