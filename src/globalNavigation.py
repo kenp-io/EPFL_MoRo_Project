@@ -9,7 +9,7 @@ import threading
 import time
 
 import utils
-import kalman
+#import kalman
 #maybe to remove
 import vision
 import localNavigation
@@ -374,13 +374,13 @@ def followPath(ourThymio, path):
             turnAngle(angleToTurn, ourThymio)
 
         #Goes forward towards next goal, kalman and local avoidance is active
-        ourThymio.stopKalmanFlag.clear()
-        kThread = kalman.kalmanThread(ourThymio)
+        #ourThymio.stopKalmanFlag.clear()
+        #kThread = kalman.kalmanThread(ourThymio)
 
         distance = distanceCalculator(path[index], path[index+1])
         goForward(distance, ourThymio)
 
-        kThread.start()
+        #kThread.start()
 
         while not REACHED:
             #check if collision
