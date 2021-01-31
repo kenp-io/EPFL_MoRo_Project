@@ -1,19 +1,31 @@
+"""
+## localNavigation.py ##
+
+Definition of functions used in the local navigation algorithm.
+
+Imported by: globalNavigation.py.
+
+*** Functions ***
+navigate(ourThymio, proximity)
+get_prox_values(ourThymio)
+localCheck(ourThymio)
+
+"""
+
+# ******** IMPORTS ********
+
 import time
 import numpy as np
 import utils
 import globalNavigation
 from Thymio import Thymio
 
+# ******** CONSTANTS ********
+
 ROTATE_SLOWBW = 2**16-100 # bw for backward
 ROTATE_FASTFW = 200 #fw for frontward
 FAST          = 150
 SLOW          = 100
-
-PROX_LEFT  = 0
-PROX_FL   = 1
-PROX_FRONT = 2
-PROX_FR   = 3
-PROX_RIGHT = 4
 
 DIST_FRONT = 1200  #put corresponding distance in cm
 DIST_DIAG  = 1500
@@ -27,137 +39,201 @@ SIDE_TIME  = 0.15
 ROT_TIME   = 1.58
 FW_TIME    = 6.75 #forward time
 
-def navigate(ourThymio, proximity):
+#####
 
-    right_rotspeed = ROTATE_SLOWBW
-    left_rotspeed = ROTATE_FASTFW
-    delay_forward = FW_TIME
+PROX_LEFT  = 0
+PROX_FL   = 1
+PROX_FRONT = 2
+PROX_FR   = 3
+PROX_RIGHT = 4
 
-    delay_side    = 0
-    ourThymio.th.set_var_array("leds.top", [0, 50, 10])
+#measured DISTANCES indexes
+DIST_LEFT_SIDE   = 0
+DIST_LEFT_DIAG   = 1
+DIST_FLEFT       = 2
+DIST_FRONT       = 3
+DIST_FRIGHT      = 4
+DIST_RIGHT_DIAG  = 5
+DIST_RIGHT_SIDE  = 6
 
-    time.sleep(0.5)
+DIST_THRES       = 1000
 
-    ourThymio.forward()
+CLOSE_OFFSET     = 200
 
-    while(delay_side == 0):
-        proximity = get_prox_values(ourThymio)
-        # side proximity sensors
-        if (proximity[PROX_LEFT] + proximity[PROX_RIGHT] > DIST_SIDE):
-            # object seen by diagonal sensors
-            if ((proximity[PROX_FR]  + proximity[PROX_FL] ) > DIST_DIAG): # Computation of an adapted overtaking time
-                delay_side = (DIAG_TIME + SIDE_TIME) / 2
-                delay_forward = 0.90 * FW_TIME
-                print("diagside")
+LEFT_OVERTAKE    = (True, False)
+RIGHT_OVERTAKE   = (False, True)
+CLEAR_WAY        = (True, True)
+LEFT             = 0
+RIGHT            = 1
 
-            # object seen only by side sensors
+PRESENT          = 1
+ABSENT           = 0
+
+DISTANCES = [2000, 2500 , 2600, 2200, 2600, 2500, 2000]
+
+# ******** FUNCTIONS ********
+
+def navigate(ourThymio):
+    """
+    Local Navigation moving algorith
+
+    :param ourThymio: object of class virtualThymio representing our robot,
+              gathering state information and class methods
+    """
+
+    side_space = (True,True) # Boolean True if there is enough space on left and/or right sides
+    side = (False, False)
+    long_overtake = ABSENT #ABSENT 0, PRESENT 1 for long overtake
+
+    ourThymio.th.set_var_array("leds.top", [5, 100, 0])
+
+    rot_angle = -90
+    proximity = get_prox_values(ourThymio)
+
+    if (sum(proximity[i] for i in range(3)) >= sum(proximity[i] for i in [3,4]) and sum(proximity) > DIST_THRES):
+        #object on the left or front
+        if side_space[RIGHT]:
+            side = RIGHT_OVERTAKE
+            long_overtake = ABSENT
+            ourThymio.th.set_var_array("leds.top", [0, 50, 100]) #light blue
+        elif side_space[LEFT]:
+            rot_angle = -rot_angle #=90
+            side = LEFT_OVERTAKE
+            long_overtake = PRESENT
+            ourThymio.th.set_var_array("leds.top", [200, 10, 0]) #dark orange
+
+    elif (sum(proximity[i] for i in [3,4]) > DIST_THRES):
+        # object on the right
+        if side_space[LEFT]:
+            rot_angle = -rot_angle #=90
+            side = LEFT_OVERTAKE
+            long_overtake = ABSENT
+            ourThymio.th.set_var_array("leds.top", [100, 50, 0]) #jaune light
+        elif side_space[RIGHT]:
+            side = RIGHT_OVERTAKE
+            long_overtake = PRESENT
+            ourThymio.th.set_var_array("leds.top", [0, 0, 200]) #dark blue
+
+    print("side before if",side)
+    if (sum(proximity) > DIST_THRES): #if object detected
+
+        print("\nside",side)
+        if (side == LEFT_OVERTAKE): #overtake on left side, inversion of pivoting speeds
+            if long_overtake:
+                time.sleep(1)
+            elif (side_space == CLEAR_WAY):
+                while (proximity[PROX_RIGHT] < DISTANCES[PROX_RIGHT]+CLOSE_OFFSET and
+                       proximity[PROX_FR] < DISTANCES[PROX_FR]+CLOSE_OFFSET):
+                    proximity = get_prox_values(ourThymio)
+                    print("proxRovertakeleft",proximity)
+                    time.sleep(0.05)
+
+        elif (side == RIGHT_OVERTAKE):
+            if long_overtake:
+                time.sleep(1)
+            elif (side_space == CLEAR_WAY):
+                while (proximity[PROX_LEFT] < DISTANCES[PROX_LEFT]+CLOSE_OFFSET and
+                       proximity[PROX_FL] < DISTANCES[PROX_FL]+CLOSE_OFFSET and
+                       proximity[PROX_FRONT] < DISTANCES[PROX_FRONT]+CLOSE_OFFSET):
+                    proximity = get_prox_values(ourThymio)
+                    print("proxLovertakeright",proximity)
+                    time.sleep(0.05)
+
+        # first turn when the object is in sight
+        print(proximity)
+        globalNavigation.turnAngle(np.deg2rad(rot_angle),ourThymio)
+
+        # step 1 contournement
+
+        cube = PRESENT
+        while(cube == PRESENT):
+            #move on the side a bit
+            ourThymio.forward()
+            print("forward1")
+            if long_overtake:
+                time.sleep(1.6)
             else:
-                delay_side = SIDE_TIME
-                delay_forward = 0.82 * FW_TIME
-                #rot_time = 0.7 * rot_time # angle of 45°
-
-            # object on the right
-            if (proximity[PROX_RIGHT] > proximity[PROX_LEFT]):
-                # inversion of speed to turn on the right side
-                right_rotspeed, left_rotspeed = left_rotspeed, right_rotspeed
-                print("right",proximity[PROX_RIGHT])
+                time.sleep(1)
+            #turn to see if cube overpassed (cube ABSENT)
+            globalNavigation.turnAngle(np.deg2rad(-rot_angle),ourThymio)
+            proximity[PROX_FRONT] = ourThymio.th["prox.horizontal"][PROX_FRONT]
+            proximity[(PROX_LEFT if side[RIGHT] else PROX_RIGHT)] = ourThymio.th["prox.horizontal"][(PROX_LEFT if side[RIGHT] else PROX_RIGHT)]
+            proximity[(PROX_FL if side[RIGHT] else PROX_FR)] = ourThymio.th["prox.horizontal"][(PROX_FL if side[RIGHT] else PROX_FR)]
+            print("check1")
+            #set_motor(left_rotanalyse,right_rotanalyse)
+            if (proximity[(PROX_LEFT if side[RIGHT] else PROX_RIGHT)] < DIST_THRES and
+                proximity[(PROX_FL if side[RIGHT] else PROX_FR)] < DIST_THRES and
+                proximity[PROX_FRONT] < DIST_THRES):
+                cube = ABSENT
+                print("absent")
 
             else:
-                print("left")
+                globalNavigation.turnAngle(np.deg2rad(rot_angle),ourThymio)
+                print("returncheck1")
 
-        # diagonal prox sensors
-        elif (proximity[PROX_FL]  + proximity[PROX_FR]  > DIST_DIAG):
-            # object also seen by front sensor
-            if (proximity[PROX_FRONT] > DIST_FRONT):
-                delay_side = (FRONT_TIME + DIAG_TIME) / 2
-                print("diag_front")
+        cube = PRESENT
+        while(cube == PRESENT):
+            #move on the side a bit
+            ourThymio.forward()
+            time.sleep(1.3)
+            #turn to see if cube overpassed (cube ABSENT)
+            globalNavigation.turnAngle(np.deg2rad(-0.65*rot_angle),ourThymio)
+            #set_motor(left_rotanalyse,right_rotanalyse)
+            proximity[PROX_FRONT] = ourThymio.th["prox.horizontal"][PROX_FRONT]
+            proximity[(PROX_LEFT if side[RIGHT] else PROX_RIGHT)] = ourThymio.th["prox.horizontal"][(PROX_LEFT if side[RIGHT] else PROX_RIGHT)]
+            proximity[(PROX_FL if side[RIGHT] else PROX_FR)] = ourThymio.th["prox.horizontal"][(PROX_FL if side[RIGHT] else PROX_FR)]
+            print("check1")
+            if (proximity[(PROX_LEFT if side[RIGHT] else PROX_RIGHT)] < DIST_THRES and
+                proximity[(PROX_FL if side[RIGHT] else PROX_FR)] < DIST_THRES and
+                proximity[PROX_FRONT] < DIST_THRES):
+                cube = ABSENT
+                print("absent")
+
             else:
-                delay_side = DIAG_TIME
-                delay_forward = 0.90 * FW_TIME
-
-            # object on the right
-            if (proximity[PROX_FR]  > proximity[PROX_FL] ):
-                # inversion of speed to turn on the right side
-                right_rotspeed, left_rotspeed = left_rotspeed, right_rotspeed
-                print("rightdiag")
-            print("left_diag")
-
-        # front sensor alone
-        elif (proximity[PROX_FRONT] > DIST_FRONT):
-            time.sleep(0.05)
-            # wiat if the object is on the side
-            if (ourThymio.th["prox.horizontal"][PROX_FL] + ourThymio.th["prox.horizontal"][PROX_FR] < DIAG_TIME):
-                delay_side = FRONT_TIME
-                # turn by right side by default
-                print("front")
-
-        # no object visible by any of the proximity sensors
-        else:
-            print("no object")
-
-    # out of while loop
-
-    # rotation 90° on left/right side
-    if left_rotspeed < 0:
-        globalNavigation.turnAngle(np.deg2rad(90),ourThymio)
-    else:
-        globalNavigation.turnAngle(np.deg2rad(-90),ourThymio)
-
-    # step 1 contournement
-    ourThymio.forward()
-    time.sleep(delay_side)
-
-    # rotation 90° on right/left side
-    if left_rotspeed > 0:
-        globalNavigation.turnAngle(np.deg2rad(90),ourThymio)
-    else:
-        globalNavigation.turnAngle(np.deg2rad(-90),ourThymio)
-
-    # step 2 contournement
-    ourThymio.forward()
-    time.sleep(delay_forward)
-
-    '''# rotation 90° on right/left side
-    #if (delay != SIDE_TIME):
-    set_motor(right_rotspeed,left_rotspeed, ourThymio)
-    time.sleep(ROT_TIME)
-
-    # step 3 contournement
-    set_motor(SLOW,SLOW, ourThymio)
-    time.sleep(delay_side)
-
-    # rotation 90° on left/right side
-    set_motor(left_rotspeed,right_rotspeed, ourThymio)
-    time.sleep(ROT_TIME)'''
-
-    ourThymio.th.set_var_array("leds.top", [0, 50, 10])
-    # exit of the robot
-    ourThymio.th.set_var_array("leds.top", [0, 0, 0])
-    # out of while loop
-    #delay_side    = 0
-    #delay_forward = 4.2
-    #rot_time = ROT_TIME
-
-    #stop the robot
-    ourThymio.stop()
+                globalNavigation.turnAngle(np.deg2rad(0.65*rot_angle),ourThymio)
+            ourThymio.th.set_var_array("leds.top", [0, 0, 0])
+            side = (False, False)
+            rot_angle = -90
 
 def get_prox_values(ourThymio):
-    proximity = np.zeros(5)#[0, 0, 0, 0, 0]
+    """
+    Returns the proximity sensors' values
+
+    :param ourThymio: object of class virtualThymio representing our robot,
+                      gathering state information and class methods
+
+    :return: np array of size 5 with proximity sensors values catched
+             at the function call
+    """
+    proximity = np.zeros(5)
     proximity[PROX_LEFT]  = ourThymio.th["prox.horizontal"][PROX_LEFT]
     proximity[PROX_FL]    = ourThymio.th["prox.horizontal"][PROX_FL]
     proximity[PROX_FRONT] = ourThymio.th["prox.horizontal"][PROX_FRONT]
     proximity[PROX_FR]    = ourThymio.th["prox.horizontal"][PROX_FR]
     proximity[PROX_RIGHT] = ourThymio.th["prox.horizontal"][PROX_RIGHT]
+
     return proximity
 
-def localCheck(ourThymio):
+def localCheck(ourThymio): #check if object detected to enter loccal nav
+    """
+    Indicates if the Thymio locally detects an obstacle with its proximity sensors' values
+
+    :param ourThymio: object of class virtualThymio representing our robot,
+                      gathering state information and class methods
+
+    :return: boolean indicating whether the Thymio detects an local obstacle
+    """
+
     prox_values = get_prox_values(ourThymio)
     if sum(prox_values) > DIST_THRESH:
+
         print('PROX VALUES')
         print(prox_values)
         ourThymio.inLocal = True
         ourThymio.stopKalmanFlag.set()
-        navigate(ourThymio, prox_values)
+        navigate(ourThymio)
+
         return True
+
     else:
         return False
